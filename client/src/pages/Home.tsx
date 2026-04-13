@@ -1,49 +1,102 @@
 import { useState } from "react";
-import { useStellarWallet } from "@/_core/hooks/useStellarWallet";
+import { useStellarWallet } from "@/_core/context/StellarWalletContext";
+import { useAgentWorkflow } from "@/_core/context/AgentWorkflowContext";
+import type { AgentActivityState } from "@shared/appConnectionModel";
 import { WalletConnect } from "@/components/WalletConnect";
 import { AgentChat } from "@/components/AgentChat";
 import { AccountDashboard } from "@/components/AccountDashboard";
 import { AgentTaskPanel } from "@/components/AgentTaskPanel";
 import { Zap, Wallet, MessageSquare, Activity, ArrowRight, Sparkles, Cpu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { trpc } from "@/lib/trpc";
+import { STELLAR_SEARCH_USES_MOCK } from "@shared/const";
+import { LayoutSection } from "@/components/LayoutSection";
+import { SearchDemoPanel } from "@/components/SearchDemoPanel";
+import { ActivityFeedSection } from "@/components/ActivityFeedSection";
 
-export default function Home() {
-  const { isConnected, account, connectWallet } = useStellarWallet();
+function agentActivityLabel(state: AgentActivityState): string {
+  switch (state) {
+    case "idle":
+      return "Idle";
+    case "thinking":
+      return "Thinking";
+    case "planning":
+      return "Planning";
+    case "calling_tool":
+      return "Calling tool";
+    case "waiting_wallet":
+      return "Waiting for wallet";
+    case "waiting_search":
+      return "Waiting on search";
+    case "rendering_result":
+      return "Rendering";
+    case "error":
+      return "Error";
+    default:
+      return state;
+  }
+}
+
+function HomeShell() {
+  const {
+    isConnected,
+    account,
+    publicKey,
+    connectWallet,
+    network,
+    refreshAccount,
+    status,
+    error,
+    freighterDetected,
+  } = useStellarWallet();
+  const { activity } = useAgentWorkflow();
+  const isDetecting = status === "detecting";
+  const isConnecting = status === "connecting";
+  const freighterAvailable = freighterDetected;
   const [activeTab, setActiveTab] = useState<"chat" | "dashboard" | "tasks">("chat");
   const [showApp, setShowApp] = useState(isConnected);
+  const caps = trpc.agent.capabilities.useQuery(undefined, { staleTime: 60_000 });
 
   if (!isConnected && !showApp) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden">
-        {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 right-10 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-20 left-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }}></div>
+          <div className="absolute top-20 right-10 w-96 h-96 bg-cyan-500/8 rounded-full blur-3xl animate-pulse" />
+          <div
+            className="absolute bottom-20 left-10 w-96 h-96 bg-purple-500/8 rounded-full blur-3xl animate-pulse"
+            style={{ animationDelay: "1s" }}
+          />
         </div>
 
-        {/* Header */}
-        <header className="relative z-10 border-b border-cyan-500/20 bg-slate-950/40 backdrop-blur-md">
+        <header className="relative z-10 border-b border-cyan-500/15 bg-slate-950/50 backdrop-blur-md">
           <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/50">
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md shadow-cyan-900/40">
                   <Zap className="w-6 h-6 text-white" />
                 </div>
                 <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-cyan-400">
                   Stellar AI Agent
                 </h1>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-400">Stellar Testnet</p>
+              <div className="flex flex-wrap gap-1.5 justify-end">
+                <Badge variant="outline" className="border-slate-600 text-slate-300 text-[10px]">
+                  Demo
+                </Badge>
+                {STELLAR_SEARCH_USES_MOCK && (
+                  <Badge variant="outline" className="border-amber-500/35 text-amber-200 text-[10px]">
+                    Search mock
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
         </header>
 
-        {/* Hero Section */}
         <main className="relative z-10 container mx-auto px-4 py-20">
           <div className="max-w-4xl mx-auto text-center space-y-8">
-            {/* Main Title */}
             <div className="space-y-4">
               <h2 className="text-5xl md:text-6xl font-bold">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-cyan-300">
@@ -54,87 +107,89 @@ export default function Home() {
                   Meets Intelligence
                 </span>
               </h2>
-              <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">
-                Harness the power of Stellar blockchain with AI-driven agents. Connect your wallet, chat with intelligent agents, and execute blockchain operations in real-time.
+              <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
+                Connect Freighter for live Horizon data, or open the demo to chat and inspect the agent workflow without a
+                wallet.
               </p>
             </div>
 
-            {/* Feature Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-12">
-              <div className="group relative bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-cyan-500/30 hover:border-cyan-500/60 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-cyan-500/20">
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-cyan-500/0 group-hover:from-cyan-500/5 group-hover:to-cyan-500/5 rounded-xl transition-all"></div>
-                <div className="relative z-10">
-                  <Wallet className="w-8 h-8 text-cyan-400 mb-3" />
-                  <h3 className="text-lg font-semibold text-cyan-300 mb-2">Wallet Connect</h3>
-                  <p className="text-sm text-gray-400">Seamlessly connect your Freighter wallet and manage your Stellar account</p>
+              {[
+                {
+                  icon: Wallet,
+                  title: "Wallet connect",
+                  body: "Freighter + configurable testnet or mainnet Horizon.",
+                  border: "border-cyan-500/25",
+                },
+                {
+                  icon: Cpu,
+                  title: "AI agents",
+                  body: "LLM tool calls with visible search and lookup steps.",
+                  border: "border-purple-500/25",
+                },
+                {
+                  icon: Search,
+                  title: "Search bridge",
+                  body: "Structured cards for mock or future live MCP search.",
+                  border: "border-pink-500/25",
+                },
+              ].map((f) => (
+                <div
+                  key={f.title}
+                  className={`relative bg-slate-900/40 ${f.border} rounded-xl p-6 transition hover:border-opacity-60 hover:shadow-lg hover:shadow-black/20`}
+                >
+                  <f.icon className="w-8 h-8 text-cyan-400 mb-3" />
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">{f.title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{f.body}</p>
                 </div>
-              </div>
-
-              <div className="group relative bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-purple-500/30 hover:border-purple-500/60 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-purple-500/20">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-purple-500/0 group-hover:from-purple-500/5 group-hover:to-purple-500/5 rounded-xl transition-all"></div>
-                <div className="relative z-10">
-                  <Cpu className="w-8 h-8 text-purple-400 mb-3" />
-                  <h3 className="text-lg font-semibold text-purple-300 mb-2">AI Agents</h3>
-                  <p className="text-sm text-gray-400">Interact with intelligent agents powered by advanced LLM technology</p>
-                </div>
-              </div>
-
-              <div className="group relative bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-pink-500/30 hover:border-pink-500/60 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-pink-500/20">
-                <div className="absolute inset-0 bg-gradient-to-br from-pink-500/0 to-pink-500/0 group-hover:from-pink-500/5 group-hover:to-pink-500/5 rounded-xl transition-all"></div>
-                <div className="relative z-10">
-                  <Search className="w-8 h-8 text-pink-400 mb-3" />
-                  <h3 className="text-lg font-semibold text-pink-300 mb-2">Web Search</h3>
-                  <p className="text-sm text-gray-400">Real-time web search and blockchain data lookup via MCP</p>
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
               <Button
+                type="button"
                 onClick={() => {
-                  connectWallet();
                   setShowApp(true);
+                  void connectWallet();
                 }}
-                className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black font-semibold px-8 py-6 text-lg rounded-lg shadow-lg shadow-cyan-500/50 transition-all hover:shadow-cyan-500/70 flex items-center gap-2"
+                className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black font-semibold px-8 py-6 text-lg rounded-lg shadow-md shadow-cyan-900/40 flex items-center gap-2"
               >
                 <Wallet className="w-5 h-5" />
-                Connect Wallet & Launch
+                Connect wallet & launch
                 <ArrowRight className="w-5 h-5" />
               </Button>
               <Button
+                type="button"
                 onClick={() => setShowApp(true)}
                 variant="outline"
-                className="border-purple-500/50 text-purple-300 hover:bg-purple-950/50 px-8 py-6 text-lg rounded-lg transition-all"
+                className="border-purple-500/40 text-purple-200 hover:bg-purple-950/40 px-8 py-6 text-lg rounded-lg"
               >
                 <Sparkles className="w-5 h-5 mr-2" />
-                Explore Demo
+                Explore demo (no wallet)
               </Button>
             </div>
 
-            {/* Stats Section */}
-            <div className="grid grid-cols-3 gap-4 pt-16 border-t border-gray-700/50">
+            <div className="grid grid-cols-3 gap-4 pt-16 border-t border-slate-800/80">
               <div className="text-center">
-                <p className="text-3xl font-bold text-cyan-400">100%</p>
-                <p className="text-sm text-gray-400 mt-1">Decentralized</p>
+                <p className="text-3xl font-bold text-cyan-400">Stellar</p>
+                <p className="text-sm text-slate-500 mt-1">Native scope</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-purple-400">&lt;1s</p>
-                <p className="text-sm text-gray-400 mt-1">Response Time</p>
+                <p className="text-3xl font-bold text-purple-400">tRPC</p>
+                <p className="text-sm text-slate-500 mt-1">Typed API</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-pink-400">∞</p>
-                <p className="text-sm text-gray-400 mt-1">Possibilities</p>
+                <p className="text-3xl font-bold text-pink-400">Tools</p>
+                <p className="text-sm text-slate-500 mt-1">Visible steps</p>
               </div>
             </div>
           </div>
         </main>
 
-        {/* Footer */}
-        <footer className="relative z-10 border-t border-gray-700/50 bg-slate-950/40 backdrop-blur-md mt-20">
+        <footer className="relative z-10 border-t border-slate-800/80 bg-slate-950/40 backdrop-blur-md mt-20">
           <div className="container mx-auto px-4 py-8">
-            <p className="text-center text-sm text-gray-500">
-              DoraHacks Stellar Agents x402 Stripe MPP | Powered by Stellar & AI
+            <p className="text-center text-sm text-slate-500">
+              DoraHacks Stellar Agents x402 Stripe MPP | Stellar testnet/mainnet via Horizon
             </p>
           </div>
         </footer>
@@ -142,188 +197,186 @@ export default function Home() {
     );
   }
 
+  const networkLabel = network === "mainnet" ? "Mainnet" : "Testnet";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Header */}
-      <header className="border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-cyan-500/15 bg-slate-950/85 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md shadow-slate-900/50">
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
                   Stellar AI Agent
                 </h1>
-                <p className="text-xs text-gray-400">Blockchain-powered AI assistant</p>
+                <p className="text-xs text-slate-500">Wallet + agent + Horizon</p>
               </div>
             </div>
 
-            <div className="text-right">
-              <p className="text-xs text-gray-400">Stellar Testnet</p>
-              {isConnected && account && (
-                <p className="text-sm text-cyan-400 font-mono">
-                  {account.publicKey.substring(0, 8)}...
-                </p>
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              <Badge variant="outline" className="border-cyan-500/35 text-cyan-200 text-[10px]">
+                {networkLabel}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={`text-[10px] ${caps.data?.llmConfigured ? "border-emerald-500/40 text-emerald-300" : "border-amber-500/40 text-amber-200"}`}
+              >
+                {caps.data?.llmConfigured ? "LLM live" : "LLM required"}
+              </Badge>
+              {STELLAR_SEARCH_USES_MOCK && (
+                <Badge variant="outline" className="border-amber-500/35 text-amber-200 text-[10px]">
+                  Search mock
+                </Badge>
+              )}
+              {!isConnected && (
+                <Badge variant="outline" className="border-slate-600 text-slate-300 text-[10px]">
+                  Wallet optional
+                </Badge>
+              )}
+              {isConnected && (publicKey ?? account?.publicKey) && (
+                <span
+                  className="text-xs font-mono text-cyan-400/90 truncate max-w-[10rem]"
+                  title={publicKey ?? account?.publicKey}
+                >
+                  {(publicKey ?? account!.publicKey).slice(0, 6)}…{(publicKey ?? account!.publicKey).slice(-4)}
+                </span>
               )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
+      <div
+        className="border-b border-cyan-500/10 bg-slate-950/60"
+        role="status"
+        aria-live="polite"
+        aria-label="App connection status"
+      >
+        <div className="container mx-auto px-4 py-2.5 text-xs text-slate-400 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+          <span>
+            <span className="text-slate-500">Wallet: </span>
+            {isDetecting && "Checking Freighter…"}
+            {!isDetecting && isConnecting && "Connecting…"}
+            {!isDetecting && !isConnecting && status === "connected" && "Connected"}
+            {!isDetecting && !isConnecting && status === "disconnected" && "Disconnected"}
+            {!isDetecting && !isConnecting && status === "idle" && "Ready to connect"}
+            {!isDetecting && !isConnecting && status === "error" && (error ? `Error — ${error}` : "Error")}
+          </span>
+          <span className="hidden sm:inline text-slate-700" aria-hidden>
+            ·
+          </span>
+          <span>
+            <span className="text-slate-500">Freighter: </span>
+            {freighterAvailable === null && "…"}
+            {freighterAvailable === true && "Available"}
+            {freighterAvailable === false && "Not detected"}
+          </span>
+          <span className="hidden sm:inline text-slate-700" aria-hidden>
+            ·
+          </span>
+          <span>
+            <span className="text-slate-500">Agent: </span>
+            {agentActivityLabel(activity)}
+          </span>
+        </div>
+      </div>
+
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Sidebar - Wallet & Info */}
           <div className="lg:col-span-1 space-y-4">
             <WalletConnect />
-
-            {isConnected && account && (
-              <div className="space-y-2">
-                <div className="bg-slate-950 border border-purple-500/30 rounded-lg p-3">
-                  <p className="text-xs text-gray-400 mb-2">Quick Stats</p>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Balance:</span>
-                      <span className="text-cyan-300 font-mono">
-                        {parseFloat(account.balance).toFixed(2)} XLM
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Sequence:</span>
-                      <span className="text-purple-300 font-mono text-xs">
-                        {account.sequenceNumber}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            <ActivityFeedSection />
           </div>
 
-          {/* Main Content Area */}
-          <div className="lg:col-span-3">
-            {!isConnected ? (
-              <div className="bg-slate-950 border border-cyan-500/30 rounded-lg p-8 text-center">
-                <Wallet className="w-12 h-12 text-cyan-400 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold text-cyan-400 mb-2">
-                  Connect Your Stellar Wallet
-                </h2>
-                <p className="text-gray-400 mb-4">
-                  To get started with the Stellar AI Agent, connect your Freighter wallet to access
-                  blockchain features and agent capabilities.
-                </p>
-                <p className="text-xs text-gray-500">
-                  Make sure you have the Freighter wallet extension installed in your browser.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Tab Navigation */}
-                <div className="flex gap-2 bg-slate-950 border border-purple-500/30 rounded-lg p-2">
-                  <button
-                    onClick={() => setActiveTab("chat")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded transition ${
-                      activeTab === "chat"
-                        ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white"
-                        : "text-gray-400 hover:text-purple-400"
-                    }`}
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    <span className="text-sm">Chat</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("dashboard")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded transition ${
-                      activeTab === "dashboard"
-                        ? "bg-gradient-to-r from-cyan-600 to-cyan-500 text-white"
-                        : "text-gray-400 hover:text-cyan-400"
-                    }`}
-                  >
-                    <Wallet className="w-4 h-4" />
-                    <span className="text-sm">Dashboard</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("tasks")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded transition ${
-                      activeTab === "tasks"
-                        ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white"
-                        : "text-gray-400 hover:text-purple-400"
-                    }`}
-                  >
-                    <Activity className="w-4 h-4" />
-                    <span className="text-sm">Tasks</span>
-                  </button>
-                </div>
-
-                {/* Tab Content */}
-                <div className="h-96 lg:h-[600px]">
-                  {activeTab === "chat" && account && (
-                    <AgentChat walletPublicKey={account.publicKey} />
-                  )}
-                  {activeTab === "dashboard" && account && (
-                    <AccountDashboard publicKey={account.publicKey} />
-                  )}
-                  {activeTab === "tasks" && <AgentTaskPanel />}
-                </div>
-              </div>
+          <div className="lg:col-span-3 space-y-4">
+            {!isConnected && (
+              <Alert className="border-cyan-500/25 bg-slate-900/50">
+                <Wallet className="h-4 w-4 text-cyan-400" />
+                <AlertTitle className="text-cyan-200">Wallet not connected</AlertTitle>
+                <AlertDescription className="text-slate-400 text-sm">
+                  Chat and tasks work in demo mode. Connect Freighter for live balances and a personalized dashboard.
+                </AlertDescription>
+              </Alert>
             )}
+
+            <div className="flex gap-2 bg-slate-950/80 border border-purple-500/20 rounded-lg p-2">
+              {(
+                [
+                  ["chat", MessageSquare, "Chat"],
+                  ["dashboard", Wallet, "Dashboard"],
+                  ["tasks", Activity, "Tasks"],
+                ] as const
+              ).map(([key, Icon, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveTab(key)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                    activeTab === key
+                      ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-sm"
+                      : "text-slate-400 hover:text-purple-200 hover:bg-slate-900/80"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="h-[min(70vh,640px)] min-h-[22rem]">
+              {activeTab === "chat" && (
+                <AgentChat walletPublicKey={publicKey ?? account?.publicKey} />
+              )}
+              {activeTab === "dashboard" &&
+                (isConnected && (publicKey ?? account?.publicKey) ? (
+                  <div className="h-full overflow-y-auto pr-1">
+                    <AccountDashboard
+                      publicKey={publicKey ?? account!.publicKey}
+                      network={network}
+                      onRefreshWallet={() => void refreshAccount()}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center rounded-lg border border-cyan-500/20 bg-slate-950/60 p-8 text-center">
+                    <Wallet className="w-12 h-12 text-cyan-500/80 mb-4" aria-hidden />
+                    <h2 className="text-lg font-semibold text-cyan-200 mb-2">Dashboard needs a wallet</h2>
+                    <p className="text-sm text-slate-400 max-w-md leading-relaxed">
+                      Connect Freighter to load account details, balances, and Horizon activity for the selected network.
+                    </p>
+                  </div>
+                ))}
+              {activeTab === "tasks" && (
+                <div className="h-full min-h-0">
+                  <AgentTaskPanel />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-cyan-500/20 bg-slate-950/80 mt-12">
-        <div className="container mx-auto px-4 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div>
-              <h3 className="text-cyan-400 font-semibold mb-2">About</h3>
-              <p className="text-sm text-gray-400">
-                Stellar AI Agent combines blockchain technology with AI to create intelligent,
-                autonomous agents on the Stellar network.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-purple-400 font-semibold mb-2">Features</h3>
-              <ul className="text-sm text-gray-400 space-y-1">
-                <li>• Real-time wallet integration</li>
-                <li>• AI-powered search and lookup</li>
-                <li>• Blockchain transaction tracking</li>
-                <li>• Live agent task monitoring</li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-cyan-400 font-semibold mb-2">Resources</h3>
-              <ul className="text-sm text-gray-400 space-y-1">
-                <li>
-                  <a
-                    href="https://developers.stellar.org"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-cyan-400 transition"
-                  >
-                    Stellar Docs
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://freighter.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-cyan-400 transition"
-                  >
-                    Freighter Wallet
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 pt-4 text-center text-xs text-gray-500">
-            <p>Stellar AI Agent © 2026 | DoraHacks Stellar Agents x402 Stripe MPP</p>
-          </div>
+      <div id="search-demo" className="container mx-auto px-4 pb-10">
+        <LayoutSection
+          title="Search experience (demo)"
+          description="Uses the same tRPC search procedure as the agent. Results are labeled mock data until a live MCP server is connected."
+        >
+          <SearchDemoPanel />
+        </LayoutSection>
+      </div>
+
+      <footer className="border-t border-cyan-500/15 bg-slate-950/80 mt-12">
+        <div className="container mx-auto px-4 py-6 text-center text-xs text-slate-500">
+          Stellar AI Agent · Horizon {networkLabel} ·{" "}
+          <a href="https://freighter.app" className="text-cyan-500/90 hover:underline" target="_blank" rel="noreferrer">
+            Freighter
+          </a>
         </div>
       </footer>
     </div>
   );
 }
+
+export default HomeShell;

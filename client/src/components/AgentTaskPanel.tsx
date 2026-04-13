@@ -1,158 +1,127 @@
-import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Database, Zap, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { useAgentWorkflow } from "@/_core/context/AgentWorkflowContext";
+import { Activity, Clock, ListTree } from "lucide-react";
+import type { AgentActivityState } from "@shared/appConnectionModel";
 
-interface Task {
-  id: string;
-  name: string;
-  type: "search" | "blockchain_lookup" | "balance_check" | "chat";
-  status: "pending" | "running" | "completed" | "failed";
-  startTime: Date;
-  endTime?: Date;
-  result?: string;
-  error?: string;
+function activityLabel(s: AgentActivityState): string {
+  switch (s) {
+    case "idle":
+      return "Idle";
+    case "thinking":
+      return "Thinking";
+    case "planning":
+      return "Planning";
+    case "calling_tool":
+      return "Calling tool";
+    case "waiting_wallet":
+      return "Waiting for wallet";
+    case "waiting_search":
+      return "Waiting on search";
+    case "rendering_result":
+      return "Rendering result";
+    case "error":
+      return "Error";
+    default:
+      return s;
+  }
+}
+
+function elapsed(fromIso: string, toIso?: string): string {
+  const a = new Date(fromIso).getTime();
+  const b = (toIso ? new Date(toIso) : new Date()).getTime();
+  const s = Math.max(0, Math.round((b - a) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
 }
 
 export function AgentTaskPanel() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-
-  // Simulate task execution for demo
-  useEffect(() => {
-    const timer = setInterval(() => {
-      // Add random demo tasks
-      if (Math.random() > 0.7) {
-        const taskTypes: Array<"search" | "blockchain_lookup" | "balance_check" | "chat"> = [
-          "search",
-          "blockchain_lookup",
-          "balance_check",
-          "chat",
-        ];
-        const newTask: Task = {
-          id: `task_${Date.now()}`,
-          name: `${taskTypes[Math.floor(Math.random() * taskTypes.length)]} query`,
-          type: taskTypes[Math.floor(Math.random() * taskTypes.length)],
-          status: "running",
-          startTime: new Date(),
-        };
-
-        setTasks((prev) => [newTask, ...prev.slice(0, 9)]);
-
-        // Simulate task completion
-        setTimeout(() => {
-          setTasks((prev) =>
-            prev.map((t) =>
-              t.id === newTask.id
-                ? {
-                    ...t,
-                    status: Math.random() > 0.1 ? "completed" : "failed",
-                    endTime: new Date(),
-                    result:
-                      Math.random() > 0.1 ? "Task completed successfully" : undefined,
-                    error: Math.random() > 0.1 ? undefined : "Task failed",
-                  }
-                : t
-            )
-          );
-        }, 2000 + Math.random() * 3000);
-      }
-    }, 5000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const getTaskIcon = (type: string) => {
-    switch (type) {
-      case "search":
-        return <Search className="w-4 h-4 text-cyan-400" />;
-      case "blockchain_lookup":
-        return <Database className="w-4 h-4 text-purple-400" />;
-      case "balance_check":
-        return <Zap className="w-4 h-4 text-yellow-400" />;
-      default:
-        return <Zap className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="w-4 h-4 text-green-400" />;
-      case "failed":
-        return <AlertCircle className="w-4 h-4 text-red-400" />;
-      case "running":
-        return <Clock className="w-4 h-4 text-cyan-400 animate-spin" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-950 text-green-300 border-green-500/30";
-      case "failed":
-        return "bg-red-950 text-red-300 border-red-500/30";
-      case "running":
-        return "bg-cyan-950 text-cyan-300 border-cyan-500/30";
-      default:
-        return "bg-gray-950 text-gray-300 border-gray-500/30";
-    }
-  };
+  const { activity, timeline, currentTask } = useAgentWorkflow();
 
   return (
-    <Card className="bg-slate-950 border-purple-500/50 h-full flex flex-col">
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-purple-500/30 p-4">
-        <h3 className="text-purple-400 font-semibold">Agent Tasks</h3>
-        <p className="text-xs text-gray-400 mt-1">
-          {tasks.filter((t) => t.status === "running").length} running
+    <Card className="border border-purple-500/25 bg-slate-950/90 h-full flex flex-col min-h-0 shadow-md shadow-purple-950/20">
+      <div className="border-b border-purple-500/20 bg-slate-900/50 px-4 py-3 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-purple-400 font-semibold flex items-center gap-2">
+            <Activity className="w-4 h-4" aria-hidden />
+            Agent workflow
+          </h3>
+          <Badge variant="outline" className="text-[10px] border-amber-500/35 text-amber-200">
+            Live trace
+          </Badge>
+        </div>
+        <p className="text-xs text-slate-500">
+          Stages update when you send chat messages. This is not a random simulator.
         </p>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
-        {tasks.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <p className="text-sm">No tasks yet</p>
-            <p className="text-xs mt-2">Agent tasks will appear here</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className="bg-slate-900/50 border border-purple-500/20 rounded p-3 hover:border-purple-500/50 transition"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {getTaskIcon(task.type)}
-                    <span className="text-sm text-cyan-300 font-mono">{task.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(task.status)}
-                    <Badge className={`text-xs ${getStatusBadgeColor(task.status)}`}>
-                      {task.status}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="text-xs text-gray-400 space-y-1">
-                  <p>Started: {task.startTime.toLocaleTimeString()}</p>
-                  {task.endTime && (
-                    <p>
-                      Duration:{" "}
-                      {Math.round(
-                        (task.endTime.getTime() - task.startTime.getTime()) / 1000
-                      )}
-                      s
-                    </p>
-                  )}
-                  {task.result && <p className="text-green-400">{task.result}</p>}
-                  {task.error && <p className="text-red-400">{task.error}</p>}
-                </div>
+      <div className="p-4 border-b border-purple-500/15 space-y-3">
+        {currentTask ? (
+          <>
+            <div className="flex justify-between gap-2 text-sm">
+              <span className="text-slate-400">Current task</span>
+              <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-200">
+                {currentTask.stage.replace(/_/g, " ")}
+              </Badge>
+            </div>
+            <p className="text-sm text-cyan-100/90 leading-snug">{currentTask.title}</p>
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>Progress</span>
+                <span>{Math.round(currentTask.progress01 * 100)}%</span>
               </div>
-            ))}
+              <Progress value={currentTask.progress01 * 100} className="h-2 bg-slate-800" />
+            </div>
+            <p className="text-xs text-slate-400 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+              {currentTask.currentAction}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Elapsed {elapsed(currentTask.startedAt, currentTask.completedAt)} · Agent state:{" "}
+              <span className="text-purple-300">{activityLabel(activity)}</span>
+            </p>
+            {currentTask.resultSummary && (
+              <p className="text-xs text-emerald-400/90 border border-emerald-500/20 rounded-md px-2 py-1.5 bg-emerald-950/20">
+                {currentTask.resultSummary}
+              </p>
+            )}
+            {currentTask.errorMessage && (
+              <p className="text-xs text-red-300/90 border border-red-500/25 rounded-md px-2 py-1.5 bg-red-950/20">
+                {currentTask.errorMessage}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-6 text-slate-500 text-sm space-y-2" role="status">
+            <p>No active task</p>
+            <p className="text-xs text-slate-600">Send a message in Chat to drive the agent pipeline.</p>
           </div>
+        )}
+      </div>
+
+      <ScrollArea className="flex-1 min-h-0 p-4">
+        <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+          <ListTree className="w-4 h-4" aria-hidden />
+          Event timeline
+        </div>
+        {timeline.length === 0 ? (
+          <p className="text-sm text-slate-600 py-4 text-center">Timeline is empty until the next agent turn.</p>
+        ) : (
+          <ol className="space-y-2 border-l border-purple-500/25 ml-2 pl-4">
+            {timeline.map((ev) => (
+              <li key={ev.id} className="relative text-sm">
+                <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                <p className="text-slate-200">{ev.label}</p>
+                {ev.detail && <p className="text-xs text-slate-500 mt-0.5">{ev.detail}</p>}
+                <time className="text-[10px] text-slate-600 mt-1 block" dateTime={ev.at}>
+                  {new Date(ev.at).toLocaleTimeString()}
+                </time>
+              </li>
+            ))}
+          </ol>
         )}
       </ScrollArea>
     </Card>

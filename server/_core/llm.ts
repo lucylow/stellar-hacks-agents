@@ -25,11 +25,22 @@ export type FileContent = {
 
 export type MessageContent = string | TextContent | ImageContent | FileContent;
 
+export type ToolCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+};
+
 export type Message = {
   role: Role;
   content: MessageContent | MessageContent[];
   name?: string;
   tool_call_id?: string;
+  /** Assistant follow-up after tool execution (OpenAI-style chat completions) */
+  tool_calls?: ToolCall[];
 };
 
 export type Tool = {
@@ -66,15 +77,6 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
-};
-
-export type ToolCall = {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
 };
 
 export type InvokeResult = {
@@ -137,7 +139,7 @@ const normalizeContentPart = (
 };
 
 const normalizeMessage = (message: Message) => {
-  const { role, name, tool_call_id } = message;
+  const { role, name, tool_call_id, tool_calls } = message;
 
   if (role === "tool" || role === "function") {
     const content = ensureArray(message.content)
@@ -149,6 +151,22 @@ const normalizeMessage = (message: Message) => {
       name,
       tool_call_id,
       content,
+    };
+  }
+
+  if (role === "assistant" && tool_calls && tool_calls.length > 0) {
+    const raw = ensureArray(message.content);
+    let textOut = "";
+    if (raw.length > 0) {
+      const contentParts = raw.map(normalizeContentPart);
+      if (contentParts.length === 1 && contentParts[0].type === "text") {
+        textOut = contentParts[0].text;
+      }
+    }
+    return {
+      role,
+      content: textOut,
+      tool_calls,
     };
   }
 

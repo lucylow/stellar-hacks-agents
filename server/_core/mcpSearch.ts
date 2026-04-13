@@ -15,6 +15,8 @@ export interface SearchResponse {
   results: SearchResult[];
   totalResults: number;
   executionTime: number;
+  /** `mock` until a live MCP search backend is connected */
+  searchMode: "mock" | "live";
 }
 
 /**
@@ -84,6 +86,7 @@ export async function executeSearch(query: string): Promise<SearchResponse> {
       results: filteredResults.length > 0 ? filteredResults : mockResults.slice(0, 3),
       totalResults: filteredResults.length > 0 ? filteredResults.length : 3,
       executionTime,
+      searchMode: "mock",
     };
   } catch (error) {
     throw new Error(`Search execution failed: ${error}`);

@@ -1,5 +1,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { StellarWalletProvider } from "@/_core/context/StellarWalletContext";
+import { AgentWorkflowProvider } from "@/_core/context/AgentWorkflowContext";
+import { StellarAgentProvider } from "@/contexts/StellarAgentContext";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -35,7 +38,13 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <StellarWalletProvider>
+            <AgentWorkflowProvider>
+              <StellarAgentProvider>
+                <Router />
+              </StellarAgentProvider>
+            </AgentWorkflowProvider>
+          </StellarWalletProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
