@@ -470,3 +470,68 @@ textarea:focus-visible,
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Smooth transitions for interactive elements */
+.transition-smooth {
+  @apply transition-all duration-300 ease-out;
+}
+
+/* Hover lift effect */
+.hover-lift {
+  @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+}
+
+/* Glow animation */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.6);
+  }
+}
+
+.glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fade-in 0.5s ease-out;
+}
+
+/* Slide up animation */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-up {
+  animation: slide-up 0.4s ease-out;
+}
+
+/* Button hover glow effect */
+.btn-glow-hover {
+  @apply transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/50;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-300 hover:border-cyan-500/60 hover:shadow-lg hover:shadow-cyan-500/20;
+}
