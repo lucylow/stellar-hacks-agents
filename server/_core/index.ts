@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -50,16 +51,38 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    console.error("[express] Unhandled error:", err);
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
+    res.status(500).json({ error: "Internal server error" });
+  });
+
+  const preferredPortRaw = parseInt(process.env.PORT || "3000", 10);
+  const preferredPort =
+    Number.isFinite(preferredPortRaw) && preferredPortRaw > 0 ? preferredPortRaw : 3000;
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    console.error("[server] HTTP server error:", err.message);
+    if (err.code === "EADDRINUSE") {
+      console.error(`Port ${port} could not be bound (already in use).`);
+    }
+    process.exit(1);
+  });
+
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err: unknown) => {
+  console.error("[server] Fatal startup error:", err);
+  process.exit(1);
+});

@@ -17,6 +17,43 @@ import { STELLAR_NETWORK_PASSPHRASE } from "@shared/stellarHorizon";
 
 const networkIn = z.enum(["mainnet", "testnet"]).default("testnet");
 
+type AgentMarketClient = NonNullable<Awaited<ReturnType<typeof loadAgentMarketClient>>>;
+
+async function resolveAgentMarketClient(
+  network: z.infer<typeof networkIn>
+): Promise<{ kind: "unconfigured" } | { kind: "ready"; client: AgentMarketClient }> {
+  if (!getAgentMarketContractId()) {
+    return { kind: "unconfigured" };
+  }
+  const client = await loadAgentMarketClient(network);
+  if (!client) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message:
+        "The agent market contract is configured but the Soroban client could not be created. Check the contract ID and Soroban RPC URL.",
+    });
+  }
+  return { kind: "ready", client };
+}
+
+function parseContractUintString(field: string, raw: string): bigint {
+  const s = raw.trim();
+  if (!/^\d+$/.test(s)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `${field} must be a non-negative integer`,
+    });
+  }
+  try {
+    return BigInt(s);
+  } catch {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `${field} is not a valid integer`,
+    });
+  }
+}
+
 function mapSimulationFailure(err: unknown): never {
   if (err instanceof AssembledTransaction.Errors.SimulationFailed) {
     const msg = err.message || String(err);
@@ -64,6 +101,7 @@ async function readResult<T>(p: Promise<unknown>): Promise<T | undefined> {
     await tx.simulate();
     return unwrapSorobanResultTree<T>(tx.result);
   } catch (e) {
+    if (e instanceof TRPCError) throw e;
     mapSimulationFailure(e);
   }
 }
@@ -87,8 +125,9 @@ export const agentMarketContractRouter = router({
   getService: publicProcedure
     .input(z.object({ network: networkIn, serviceId: z.number().int().nonnegative() }))
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, service: null };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, service: null };
+      const client = gate.client;
       const c = client as unknown as DynClient;
       const raw = await readResult<unknown>(
         c.get_service({ service_id: input.serviceId })
@@ -108,8 +147,9 @@ export const agentMarketContractRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, services: [] as const };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, services: [] as const };
+      const client = gate.client;
       const c = client as unknown as DynClient;
       const raw = await readResult<unknown[]>(
         c.list_services({ start_after: input.startAfter, limit: input.limit })
@@ -131,8 +171,9 @@ export const agentMarketContractRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, services: [] as const };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, services: [] as const };
+      const client = gate.client;
       const c = client as unknown as DynClient;
       const raw = await readResult<unknown[]>(
         c.list_services_filter({
@@ -151,10 +192,11 @@ export const agentMarketContractRouter = router({
   getEscrow: publicProcedure
     .input(z.object({ network: networkIn, escrowId: z.string() }))
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, escrow: null };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, escrow: null };
+      const client = gate.client;
       const c = client as unknown as DynClient;
-      const id = BigInt(input.escrowId);
+      const id = parseContractUintString("escrowId", input.escrowId);
       const raw = await readResult<unknown>(c.get_escrow({ escrow_id: id }));
       return {
         configured: true as const,
@@ -165,10 +207,11 @@ export const agentMarketContractRouter = router({
   getSettlement: publicProcedure
     .input(z.object({ network: networkIn, requestId: z.string() }))
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, settlement: null };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, settlement: null };
+      const client = gate.client;
       const c = client as unknown as DynClient;
-      const rid = BigInt(input.requestId);
+      const rid = parseContractUintString("requestId", input.requestId);
       const raw = await readResult<unknown>(c.get_settlement({ request_id: rid }));
       return {
         configured: true as const,
@@ -179,10 +222,11 @@ export const agentMarketContractRouter = router({
   getActionReceipt: publicProcedure
     .input(z.object({ network: networkIn, requestId: z.string() }))
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, receipt: null };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, receipt: null };
+      const client = gate.client;
       const c = client as unknown as DynClient;
-      const rid = BigInt(input.requestId);
+      const rid = parseContractUintString("requestId", input.requestId);
       const raw = await readResult<unknown>(
         c.get_action_receipt({ request_id: rid })
       );
@@ -195,8 +239,9 @@ export const agentMarketContractRouter = router({
   getReputation: publicProcedure
     .input(z.object({ network: networkIn, serviceId: z.number().int().nonnegative() }))
     .query(async ({ input }) => {
-      const client = await loadAgentMarketClient(input.network);
-      if (!client) return { configured: false as const, reputation: null };
+      const gate = await resolveAgentMarketClient(input.network);
+      if (gate.kind === "unconfigured") return { configured: false as const, reputation: null };
+      const client = gate.client;
       const c = client as unknown as DynClient;
       const raw = await readResult<unknown>(
         c.get_reputation({ service_id: input.serviceId })

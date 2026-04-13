@@ -246,7 +246,7 @@ export function AgentTaskPanel({ embedded }: { embedded?: boolean }) {
             {currentTask.usedPaymentFlow && (
               <p className="text-[11px] text-purple-200/90 flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                This turn may include a demo x402 payment step before tools run.
+                Payment middleware may run (per-request, credits, or session) before tools — follow the chat quote.
               </p>
             )}
             {isBlockchainTurn && (

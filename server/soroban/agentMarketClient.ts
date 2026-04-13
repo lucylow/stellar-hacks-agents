@@ -11,12 +11,17 @@ export async function loadAgentMarketClient(
   const contractId = getAgentMarketContractId();
   if (!contractId) return null;
   const rpcUrl = getSorobanRpcUrl(network, getSorobanRpcUrlOverride());
-  return Client.from({
-    contractId,
-    rpcUrl,
-    networkPassphrase: STELLAR_NETWORK_PASSPHRASE[network],
-    allowHttp: network === "testnet",
-  });
+  try {
+    return Client.from({
+      contractId,
+      rpcUrl,
+      networkPassphrase: STELLAR_NETWORK_PASSPHRASE[network],
+      allowHttp: network === "testnet",
+    });
+  } catch (err) {
+    console.error("[agentMarket] Soroban Client.from failed", err);
+    return null;
+  }
 }
 
 function asBigIntString(v: unknown): string {

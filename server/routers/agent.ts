@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import type { Message, TextContent, Tool, ToolCall as LLMToolCall } from "../_core/llm";
@@ -205,7 +206,13 @@ After tools run, answer concisely and reference what you learned.`;
         }
         return await executeSearch(input.query);
       } catch (error) {
-        throw new Error(`Failed to search: ${error}`);
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("[agent.search]", detail);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Search failed: ${detail}`,
+          cause: error instanceof Error ? error : undefined,
+        });
       }
     }),
 
@@ -221,7 +228,13 @@ After tools run, answer concisely and reference what you learned.`;
           searchMode: response.searchMode,
         };
       } catch (error) {
-        throw new Error(`Failed to lookup blockchain: ${error}`);
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("[agent.blockchainLookup]", detail);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Blockchain lookup failed: ${detail}`,
+          cause: error instanceof Error ? error : undefined,
+        });
       }
     }),
 });
@@ -231,11 +244,21 @@ async function runToolCall(
   recordedTools: AgentToolCallWire[]
 ): Promise<{ payload: string }> {
   const fn = tc.function.name;
-  let args: Record<string, unknown> = {};
+  let args: Record<string, unknown>;
   try {
     args = JSON.parse(tc.function.arguments || "{}") as Record<string, unknown>;
   } catch {
-    args = {};
+    const err = "Invalid JSON in tool arguments";
+    const failed: AgentToolCallWire = {
+      id: tc.id,
+      type: fn === "search" ? "search" : fn === "blockchain_lookup" ? "blockchain_lookup" : "balance_check",
+      name: fn,
+      input: {},
+      status: "failed",
+      error: err,
+    };
+    recordedTools.push(failed);
+    return { payload: JSON.stringify({ error: err }) };
   }
 
   const base: AgentToolCallWire = {
