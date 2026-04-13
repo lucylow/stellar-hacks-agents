@@ -5,12 +5,15 @@ import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { stellarRouter } from "./routers/stellar";
 import { agentRouter } from "./routers/agent";
+import { paymentRouter } from "./routers/payment";
+import { agentMarketContractRouter } from "./routers/agentMarketContract";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   stellar: stellarRouter,
   agent: agentRouter,
+  agentMarket: agentMarketContractRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -22,52 +25,7 @@ export const appRouter = router({
     }),
   }),
 
-  // x402 Payment Endpoints
-  payments: router({
-    createChallenge: publicProcedure
-      .input(z.object({ queryId: z.string(), amount: z.number().positive(), currency: z.string().default("USDC") }))
-      .mutation(async ({ input }) => {
-        const challengeId = `challenge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        return {
-          challengeId,
-          amount: input.amount,
-          currency: input.currency,
-          queryId: input.queryId,
-          timestamp: new Date(),
-          status: "pending",
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-        };
-      }),
-    approveChallenge: publicProcedure
-      .input(z.object({ challengeId: z.string(), walletAddress: z.string() }))
-      .mutation(async ({ input }) => {
-        const transactionHash = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        return {
-          success: true,
-          transactionHash,
-          status: "confirmed",
-          timestamp: new Date(),
-          amount: 0.001,
-          currency: "USDC",
-        };
-      }),
-    getHistory: publicProcedure.query(async () => {
-      return [
-        { id: 1, type: "query", description: "Web Search Query", amount: 0.001, currency: "USDC", status: "confirmed", transactionHash: "0x123abc...", timestamp: new Date(Date.now() - 2 * 60 * 1000) },
-        { id: 2, type: "query", description: "Market Data Query", amount: 0.002, currency: "USDC", status: "confirmed", transactionHash: "0x456def...", timestamp: new Date(Date.now() - 5 * 60 * 1000) },
-        { id: 3, type: "deposit", description: "Wallet Deposit", amount: 100, currency: "USDC", status: "confirmed", transactionHash: "0x789ghi...", timestamp: new Date(Date.now() - 60 * 60 * 1000) },
-      ];
-    }),
-    getBalance: publicProcedure
-      .input(z.object({ walletAddress: z.string() }))
-      .query(async ({ input }) => ({
-        address: input.walletAddress,
-        balance: 1250.00,
-        currency: "USDC",
-        network: "testnet",
-        lastUpdated: new Date(),
-      })),
-  }),
+  payments: paymentRouter,
 
   // Wallet Endpoints
   wallet: router({

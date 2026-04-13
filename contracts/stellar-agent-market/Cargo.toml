@@ -1,0 +1,16 @@
+[package]
+name = "stellar-agent-market"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Soroban service registry, pricing, escrow, settlement, and reputation for Stellar AI agents"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "22.0.7"
+
+[dev-dependencies]
+soroban-sdk = { version = "22.0.7", features = ["testutils"] }

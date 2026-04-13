@@ -10,6 +10,8 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "contracts:build": "cargo build --manifest-path contracts/Cargo.toml -p stellar-agent-market --target wasm32-unknown-unknown --release",
+    "contracts:test": "cargo test --manifest-path contracts/Cargo.toml -p stellar-agent-market",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { StellarWalletProvider } from "@/_core/context/StellarWalletContext";
+import { ReputationProvider } from "@/_core/context/ReputationContext";
 import { AgentWorkflowProvider } from "@/_core/context/AgentWorkflowContext";
 import { StellarAgentProvider } from "@/contexts/StellarAgentContext";
 import NotFound from "@/pages/NotFound";
@@ -39,11 +40,13 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <StellarWalletProvider>
-            <AgentWorkflowProvider>
-              <StellarAgentProvider>
-                <Router />
-              </StellarAgentProvider>
-            </AgentWorkflowProvider>
+            <ReputationProvider>
+              <AgentWorkflowProvider>
+                <StellarAgentProvider>
+                  <Router />
+                </StellarAgentProvider>
+              </AgentWorkflowProvider>
+            </ReputationProvider>
           </StellarWalletProvider>
         </TooltipProvider>
       </ThemeProvider>

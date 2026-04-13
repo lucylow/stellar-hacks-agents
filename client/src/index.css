@@ -95,10 +95,14 @@
   --info: #38bdf8;
   --info-foreground: #e0f2fe;
   --text: #e8ecff;
-  --muted-text: #94a3b8;
+  --muted-text: #a3adbf;
   --error: #f87171;
   --focus-ring: color-mix(in oklab, var(--accent-primary) 55%, transparent);
   --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --space-section: 1.5rem;
+  --space-gutter: 1.25rem;
+  --btn-height: 2.75rem;
   --radius-card: 0.75rem;
   --radius-md: 0.5rem;
 }
@@ -148,10 +152,14 @@
   --info: #38bdf8;
   --info-foreground: #e0f2fe;
   --text: #e8ecff;
-  --muted-text: #94a3b8;
+  --muted-text: #a3adbf;
   --error: #f87171;
   --focus-ring: color-mix(in oklab, var(--accent-primary) 55%, transparent);
   --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --space-section: 1.5rem;
+  --space-gutter: 1.25rem;
+  --btn-height: 2.75rem;
   --radius-card: 0.75rem;
   --radius-md: 0.5rem;
 }
@@ -379,12 +387,49 @@ input:focus-visible,
 textarea:focus-visible,
 [tabindex]:not([tabindex="-1"]):focus-visible {
   @apply outline-none ring-2 ring-offset-2 ring-offset-background;
-  --tw-ring-color: color-mix(in oklab, var(--ring) 75%, transparent);
+  --tw-ring-color: var(--focus-ring);
 }
 
 .surface-card {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-elevated);
+}
+
+.app-card {
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.app-card:hover {
+  border-color: color-mix(in oklab, var(--accent-primary) 22%, var(--border));
+}
+
+.app-section + .app-section {
+  margin-top: var(--space-section);
+}
+
+/* Section titles inside product shell — avoid global marketing h2 scale */
+.app-section h2 {
+  font-size: 1.125rem;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.app-hero {
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in oklab, var(--accent-primary) 18%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--surface-elevated) 92%, var(--accent-primary)),
+    var(--surface) 55%
+  );
+  box-shadow: var(--shadow-card);
+  padding: var(--space-gutter) 1.25rem;
 }
 
 .btn-primary {

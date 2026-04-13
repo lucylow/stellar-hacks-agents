@@ -56,6 +56,7 @@ export const agentRouter = router({
   capabilities: publicProcedure.query(() => ({
     llmConfigured: Boolean(ENV.forgeApiKey && ENV.forgeApiKey.trim().length > 0),
     searchMode: "mock" as const,
+    paymentMiddleware: true as const,
   })),
 
   chat: publicProcedure
@@ -69,15 +70,29 @@ export const agentRouter = router({
           })
         ),
         walletPublicKey: z.string().optional(),
+        reputationContext: z.string().max(1200).optional(),
+        stellarContext: z.string().max(2000).optional(),
       })
     )
     .mutation(async ({ input }) => {
+      const repBlock = input.reputationContext
+        ? `\nSession trust summary (behavioral, from local app history — not identity): ${input.reputationContext}\nIf trust is weak or demo-heavy, prefer cautious language, cite verification steps, and avoid implying certainty you do not have. If trust is strong and evidence is multi-source, you may answer more directly while still encouraging on-chain verification for balances and sequence.`
+        : "";
+
+      const stellarBlock = input.stellarContext
+        ? `\nLive UI / wallet context (from the app, not a chain proof): ${input.stellarContext}\nUse this to choose tools and to say clearly whether you are on testnet or mainnet. If the wallet is missing or Horizon data is stale, say so in plain language before using tools.`
+        : "";
+
       const systemPrompt = `You are a Stellar blockchain AI agent. You have access to tools:
 1. search — search curated Stellar / web documentation (results may be demo data).
 2. blockchain_lookup — Stellar-focused lookup (demo data until live MCP is connected).
 
 When the user asks to search or find docs, call search. When they ask about on-chain data, accounts, or transactions, call blockchain_lookup.
 ${input.walletPublicKey ? `The user's Stellar wallet public key is: ${input.walletPublicKey}` : "No wallet is connected; explain when signing or account-specific actions need Freighter."}
+${stellarBlock}
+${repBlock}
+
+Payments: The client may use per-request (x402-style) quotes, prepaid credits, or session/streaming settlement. x402 on Stellar expects Soroban auth-entry signing; Freighter browser extension supports it — say clearly if the wallet cannot sign auth entries (e.g. some mobile wallets). Mention when an action looks unpaid, pending authorization, or settled only if the user’s message or context implies it; do not invent transaction IDs.
 
 After tools run, answer concisely and reference what you learned.`;
 

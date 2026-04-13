@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useDemoSearch } from "@/hooks/useDemoSearch";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -9,12 +10,38 @@ import { InlineAlert } from "@/components/ui/InlineAlert";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Search } from "lucide-react";
 import { useStellarAgent } from "@/contexts/StellarAgentContext";
+import { useReputation } from "@/_core/context/ReputationContext";
+import { rankSearchResults } from "@shared/reputationCompute";
+import type { SearchResponseWire } from "@shared/searchContract";
 
 export function SearchDemoPanel() {
   const { pushActivity } = useStellarAgent();
+  const reputation = useReputation();
   const { results, query, executionTimeMs, totalResults, error, isLoading, search, reset, isDemo } =
     useDemoSearch();
   const [localQuery, setLocalQuery] = useState("");
+  const lastReputationKey = useRef<string | null>(null);
+
+  const ranked = useMemo(() => {
+    if (!results.length) return [];
+    const wire: SearchResponseWire = {
+      query,
+      results,
+      totalResults: totalResults ?? results.length,
+      executionTime: executionTimeMs ?? 0,
+      searchMode: "mock",
+    };
+    return rankSearchResults(wire, { priorSuccessUrlSet: reputation.priorSuccessfulSearchUrls });
+  }, [results, query, totalResults, executionTimeMs, reputation.priorSuccessfulSearchUrls]);
+
+  useEffect(() => {
+    if (!query || results.length === 0 || isLoading) return;
+    const key = `${query}::${results[0]?.url ?? ""}`;
+    if (lastReputationKey.current === key) return;
+    lastReputationKey.current = key;
+    reputation.emit({ type: "search_completed", source: "search", demoMode: true });
+    reputation.markSearchUrlsUsedSuccessfully(results.map((r) => r.url));
+  }, [query, results, isLoading, reputation]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +127,7 @@ export function SearchDemoPanel() {
             {executionTimeMs != null ? <span>{executionTimeMs} ms</span> : null}
           </div>
           <ul className="space-y-2" aria-label="Demo search results">
-            {results.map((r, i) => (
+            {ranked.map((r, i) => (
               <li
                 key={`${r.url}-${i}`}
                 className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-elevated)]/80 p-3 transition hover:border-[var(--accent-primary)]/40"
@@ -114,11 +141,22 @@ export function SearchDemoPanel() {
                   {r.title}
                 </a>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--muted-text)]">{r.snippet}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-2 items-center">
                   {r.source ? (
                     <StatusBadge tone="secondary">Source: {r.source}</StatusBadge>
                   ) : null}
                   <StatusBadge tone="warning">Demo data</StatusBadge>
+                  <Badge variant="outline" className="text-[9px] border-[var(--border)] text-[var(--muted-text)]">
+                    Trust {Math.round(r.trust.sourceTrust01 * 100)}%
+                  </Badge>
+                  <Badge variant="outline" className="text-[9px] border-[var(--border)] text-[var(--muted-text)]">
+                    {r.trust.domainCredibility} domain
+                  </Badge>
+                  {r.trust.usedInSuccessfulTask ? (
+                    <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-200">
+                      Prior task success
+                    </Badge>
+                  ) : null}
                 </div>
               </li>
             ))}

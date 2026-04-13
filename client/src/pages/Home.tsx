@@ -1,3 +1,13 @@
+/**
+ * Frontend audit (pre-refactor checklist):
+ * - Wallet: detection vs connected vs Horizon account was easy to confuse; status strip + readiness labels fix that.
+ * - Chat: tool vs answer flow needed a visible “now” line and calmer cards.
+ * - Dashboard: empty disconnected state looked broken; now uses the same panel with an explicit CTA.
+ * - Tasks: stage names were raw enums; timeline is surfaced as “recent steps”.
+ * - Loading: wallet refresh and dashboard fetches now state what they’re doing.
+ * - Mock vs live: centralized badges + copy; search remains explicitly demo when flagged.
+ * - Mobile: single column stack, full-width cards, no horizontal tab strip fighting the layout.
+ */
 import { useState } from "react";
 import { useStellarWallet } from "@/_core/context/StellarWalletContext";
 import { useAgentWorkflow } from "@/_core/context/AgentWorkflowContext";
@@ -6,7 +16,8 @@ import { WalletConnect } from "@/components/WalletConnect";
 import { AgentChat } from "@/components/AgentChat";
 import { AccountDashboard } from "@/components/AccountDashboard";
 import { AgentTaskPanel } from "@/components/AgentTaskPanel";
-import { Zap, Wallet, MessageSquare, Activity, ArrowRight, Sparkles, Cpu, Search } from "lucide-react";
+import { AppSection, DemoLiveBadge } from "@/components/app/uiPrimitives";
+import { Zap, Wallet, ArrowRight, Sparkles, Cpu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -15,6 +26,9 @@ import { STELLAR_SEARCH_USES_MOCK } from "@shared/const";
 import { LayoutSection } from "@/components/LayoutSection";
 import { SearchDemoPanel } from "@/components/SearchDemoPanel";
 import { ActivityFeedSection } from "@/components/ActivityFeedSection";
+import { useReputation } from "@/_core/context/ReputationContext";
+import { TierBadge, TrendGlyph } from "@/components/reputation/TrustPrimitives";
+import { ContractMarketPanel } from "@/components/ContractMarketPanel";
 
 function agentActivityLabel(state: AgentActivityState): string {
   switch (state) {
@@ -24,14 +38,26 @@ function agentActivityLabel(state: AgentActivityState): string {
       return "Thinking";
     case "planning":
       return "Planning";
+    case "tool_selection":
+      return "Choosing tool";
     case "calling_tool":
       return "Calling tool";
     case "waiting_wallet":
       return "Waiting for wallet";
     case "waiting_search":
       return "Waiting on search";
+    case "looking_up_blockchain":
+      return "Blockchain lookup";
+    case "payment_required":
+      return "Payment required";
+    case "payment_authorizing":
+      return "Authorizing payment";
+    case "settling":
+      return "Settling";
     case "rendering_result":
       return "Rendering";
+    case "streaming":
+      return "Streaming answer";
     case "error":
       return "Error";
     default:
@@ -48,14 +74,15 @@ function HomeShell() {
     network,
     refreshAccount,
     status,
-    error,
     freighterDetected,
+    readinessLabel,
+    isWalletReady,
   } = useStellarWallet();
-  const { activity } = useAgentWorkflow();
+  const { activity, paymentReceipts } = useAgentWorkflow();
+  const reputation = useReputation();
   const isDetecting = status === "detecting";
   const isConnecting = status === "connecting";
   const freighterAvailable = freighterDetected;
-  const [activeTab, setActiveTab] = useState<"chat" | "dashboard" | "tasks">("chat");
   const [showApp, setShowApp] = useState(isConnected);
   const caps = trpc.agent.capabilities.useQuery(undefined, { staleTime: 60_000 });
 
@@ -244,35 +271,40 @@ function HomeShell() {
                   {(publicKey ?? account!.publicKey).slice(0, 6)}…{(publicKey ?? account!.publicKey).slice(-4)}
                 </span>
               )}
+              {reputation.hydrated && (
+                <span className="inline-flex items-center gap-1.5" title="Behavioral reputation in this browser">
+                  <TierBadge tier={reputation.summary.score.tier} />
+                  <span className="text-[10px] text-slate-500 tabular-nums">{reputation.summary.score.value}</span>
+                  <TrendGlyph trend={reputation.summary.score.trend} />
+                </span>
+              )}
             </div>
           </div>
         </div>
       </header>
 
       <div
-        className="border-b border-cyan-500/10 bg-slate-950/60"
+        className="border-b border-[var(--border)] bg-[var(--surface)]/75"
         role="status"
         aria-live="polite"
         aria-label="App connection status"
       >
-        <div className="container mx-auto px-4 py-2.5 text-xs text-slate-400 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
-          <span>
+        <div className="container mx-auto px-4 py-2.5 text-xs text-[var(--muted-text)] flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-1">
+          <span className="min-w-0">
             <span className="text-slate-500">Wallet: </span>
-            {isDetecting && "Checking Freighter…"}
-            {!isDetecting && isConnecting && "Connecting…"}
-            {!isDetecting && !isConnecting && status === "connected" && "Connected"}
-            {!isDetecting && !isConnecting && status === "disconnected" && "Disconnected"}
-            {!isDetecting && !isConnecting && status === "idle" && "Ready to connect"}
-            {!isDetecting && !isConnecting && status === "error" && (error ? `Error — ${error}` : "Error")}
+            <span className="text-slate-200">{readinessLabel}</span>
+            {!isWalletReady && isConnected ? (
+              <span className="text-amber-200/90"> · Finish setup in the wallet card</span>
+            ) : null}
           </span>
           <span className="hidden sm:inline text-slate-700" aria-hidden>
             ·
           </span>
           <span>
             <span className="text-slate-500">Freighter: </span>
-            {freighterAvailable === null && "…"}
-            {freighterAvailable === true && "Available"}
-            {freighterAvailable === false && "Not detected"}
+            {freighterAvailable === null && "Checking…"}
+            {freighterAvailable === true && "Installed"}
+            {freighterAvailable === false && "Required — not detected"}
           </span>
           <span className="hidden sm:inline text-slate-700" aria-hidden>
             ·
@@ -281,79 +313,131 @@ function HomeShell() {
             <span className="text-slate-500">Agent: </span>
             {agentActivityLabel(activity)}
           </span>
+          <span className="hidden sm:inline text-slate-700" aria-hidden>
+            ·
+          </span>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <span className="text-slate-500">Data: </span>
+            <DemoLiveBadge
+              mode={
+                STELLAR_SEARCH_USES_MOCK ||
+                caps.data?.searchMode === "mock" ||
+                caps.data?.searchMode == null
+                  ? "mock_search"
+                  : "live"
+              }
+            />
+            {isWalletReady ? (
+              <DemoLiveBadge mode="live_stellar" />
+            ) : (
+              <Badge variant="outline" className="text-[10px] border-slate-600 text-slate-300">
+                Stellar data gated
+              </Badge>
+            )}
+            {!isConnected ? (
+              <Badge variant="outline" className="text-[10px] border-slate-600 text-slate-300">
+                Wallet not connected
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] border-emerald-500/35 text-emerald-200">
+                Real wallet connected
+              </Badge>
+            )}
+          </span>
+          <span className="hidden sm:inline text-slate-700" aria-hidden>
+            ·
+          </span>
+          <span>
+            <span className="text-slate-500">x402 (demo): </span>
+            {paymentReceipts.length > 0
+              ? `${paymentReceipts.length} simulated settlement${paymentReceipts.length === 1 ? "" : "s"}`
+              : "none yet"}
+          </span>
         </div>
       </div>
 
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1 space-y-4">
-            <WalletConnect />
+      <main className="container mx-auto px-4 py-6 max-w-[100vw] overflow-x-hidden space-y-6">
+        <section className="app-hero" aria-labelledby="console-hero-title">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 id="console-hero-title" className="text-lg font-semibold text-cyan-100 tracking-tight">
+                Stellar AI console
+              </h2>
+              <p className="text-sm text-[var(--muted-text)] max-w-2xl leading-relaxed mt-1">
+                Wallet status, agent chat, Horizon account data, and task timing in one layout. Anything labeled demo or
+                mock uses simulated data — live ledger rows are called out when real.
+              </p>
+            </div>
+            {!isConnected && (
+              <Button
+                type="button"
+                size="sm"
+                className="btn-primary shrink-0 h-10"
+                onClick={() => void connectWallet()}
+                disabled={isDetecting || isConnecting || freighterAvailable === false}
+              >
+                Connect Freighter
+              </Button>
+            )}
+          </div>
+        </section>
+
+        {!isConnected && (
+          <Alert className="border-cyan-500/25 bg-[var(--surface)]/80">
+            <Wallet className="h-4 w-4 text-cyan-400" aria-hidden />
+            <AlertTitle className="text-cyan-200">Demo mode — wallet optional</AlertTitle>
+            <AlertDescription className="text-[var(--muted-text)] text-sm leading-relaxed">
+              Chat, tasks, and mock search run without Freighter. Connect when you want live balances, sequence, and
+              Horizon activity in the dashboard.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          <div className="xl:col-span-3 space-y-6 min-w-0">
+            <AppSection
+              title="Wallet & session"
+              description="Provider, address, balance, and network. x402 flows are demo-only here."
+            >
+              <WalletConnect />
+            </AppSection>
+            <AppSection
+              title="Account dashboard"
+              description="Live blockchain data from Horizon for the connected address."
+            >
+              <AccountDashboard onConnectRequest={() => void connectWallet()} />
+            </AppSection>
+            <AppSection
+              title="Soroban market"
+              description="Service registry, onchain pricing, escrow/settlement hooks, and reputation counters when a contract id is configured."
+            >
+              <ContractMarketPanel network={network} />
+            </AppSection>
             <ActivityFeedSection />
           </div>
 
-          <div className="lg:col-span-3 space-y-4">
-            {!isConnected && (
-              <Alert className="border-cyan-500/25 bg-slate-900/50">
-                <Wallet className="h-4 w-4 text-cyan-400" />
-                <AlertTitle className="text-cyan-200">Wallet not connected</AlertTitle>
-                <AlertDescription className="text-slate-400 text-sm">
-                  Chat and tasks work in demo mode. Connect Freighter for live balances and a personalized dashboard.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex gap-2 bg-slate-950/80 border border-purple-500/20 rounded-lg p-2">
-              {(
-                [
-                  ["chat", MessageSquare, "Chat"],
-                  ["dashboard", Wallet, "Dashboard"],
-                  ["tasks", Activity, "Tasks"],
-                ] as const
-              ).map(([key, Icon, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setActiveTab(key)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-                    activeTab === key
-                      ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-sm"
-                      : "text-slate-400 hover:text-purple-200 hover:bg-slate-900/80"
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" aria-hidden />
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="h-[min(70vh,640px)] min-h-[22rem]">
-              {activeTab === "chat" && (
+          <div className="xl:col-span-6 flex flex-col gap-6 min-w-0 min-h-0">
+            <AppSection
+              title="Agent chat"
+              description="Plans and tool calls stay visible. Demo or mock sources are labeled on each result card."
+              className="flex flex-col flex-1 min-h-0"
+            >
+              <div className="min-h-[min(70vh,720px)] min-h-[22rem] h-full flex flex-col">
                 <AgentChat walletPublicKey={publicKey ?? account?.publicKey} />
-              )}
-              {activeTab === "dashboard" &&
-                (isConnected && (publicKey ?? account?.publicKey) ? (
-                  <div className="h-full overflow-y-auto pr-1">
-                    <AccountDashboard
-                      publicKey={publicKey ?? account!.publicKey}
-                      network={network}
-                      onRefreshWallet={() => void refreshAccount()}
-                    />
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center rounded-lg border border-cyan-500/20 bg-slate-950/60 p-8 text-center">
-                    <Wallet className="w-12 h-12 text-cyan-500/80 mb-4" aria-hidden />
-                    <h2 className="text-lg font-semibold text-cyan-200 mb-2">Dashboard needs a wallet</h2>
-                    <p className="text-sm text-slate-400 max-w-md leading-relaxed">
-                      Connect Freighter to load account details, balances, and Horizon activity for the selected network.
-                    </p>
-                  </div>
-                ))}
-              {activeTab === "tasks" && (
-                <div className="h-full min-h-0">
-                  <AgentTaskPanel />
-                </div>
-              )}
-            </div>
+              </div>
+            </AppSection>
+          </div>
+
+          <div className="xl:col-span-3 min-w-0 min-h-[min(24rem,50vh)] xl:min-h-[min(70vh,720px)] flex flex-col">
+            <AppSection
+              title="Task monitor"
+              description="Stage, progress, elapsed time, and the last few timeline events for the current turn."
+              className="flex flex-col flex-1 min-h-0 h-full"
+            >
+              <div className="flex-1 min-h-0 flex flex-col">
+                <AgentTaskPanel embedded />
+              </div>
+            </AppSection>
           </div>
         </div>
       </main>
