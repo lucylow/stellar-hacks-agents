@@ -97,6 +97,101 @@ fn escrow_lifecycle_and_settlement() {
 }
 
 #[test]
+fn refund_open_escrow_payer() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, AgentMarket);
+    let admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let payer = Address::generate(&env);
+    env.mock_all_auths();
+
+    let client = AgentMarketClient::new(&env, &contract_id);
+    client.initialize(&admin).unwrap();
+
+    let asset = String::from_str(&env, "native");
+    let sid = client
+        .register_service(
+            &owner,
+            &String::from_str(&env, "r"),
+            &String::from_str(&env, "e"),
+            &String::from_str(&env, "d"),
+            &10i128,
+            &asset,
+            &ACCESS_PAID,
+        )
+        .unwrap();
+
+    let txh = Bytes::from_array(&env, &[3u8; 32]);
+    let eid = client
+        .open_escrow(&payer, &sid, &10i128, &asset, &9u64, &txh)
+        .unwrap();
+    client.refund_escrow(&payer, &eid).unwrap();
+    let esc = client.get_escrow(&eid).unwrap().unwrap();
+    assert!(matches!(esc.state, crate::EscrowState::Refunded));
+}
+
+#[test]
+fn reputation_admin_events() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, AgentMarket);
+    let admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    env.mock_all_auths();
+
+    let client = AgentMarketClient::new(&env, &contract_id);
+    client.initialize(&admin).unwrap();
+    let asset = String::from_str(&env, "native");
+    let sid = client
+        .register_service(
+            &owner,
+            &String::from_str(&env, "rep"),
+            &String::from_str(&env, "e"),
+            &String::from_str(&env, "d"),
+            &1i128,
+            &asset,
+            &ACCESS_PUBLIC,
+        )
+        .unwrap();
+
+    client.record_reputation_event(&admin, &sid, &0u32).unwrap();
+    let r = client.get_reputation(&sid).unwrap();
+    assert_eq!(r.completed_count, 1);
+    assert!(r.reputation_score > 0);
+}
+
+#[test]
+fn unauthorized_execute_escrow_wrong_owner() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, AgentMarket);
+    let admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let other = Address::generate(&env);
+    let payer = Address::generate(&env);
+    env.mock_all_auths();
+
+    let client = AgentMarketClient::new(&env, &contract_id);
+    client.initialize(&admin).unwrap();
+    let asset = String::from_str(&env, "native");
+    let sid = client
+        .register_service(
+            &owner,
+            &String::from_str(&env, "x"),
+            &String::from_str(&env, "e"),
+            &String::from_str(&env, "d"),
+            &5i128,
+            &asset,
+            &ACCESS_PAID,
+        )
+        .unwrap();
+    let txh = Bytes::from_array(&env, &[4u8; 32]);
+    let eid = client
+        .open_escrow(&payer, &sid, &5i128, &asset, &11u64, &txh)
+        .unwrap();
+    client.lock_escrow(&payer, &eid).unwrap();
+    assert!(client.execute_escrow(&other, &eid).is_err());
+}
+
+#[test]
 fn typed_error_duplicate_service_name_same_owner() {
     let env = Env::default();
     let contract_id = env.register_contract(None, AgentMarket);

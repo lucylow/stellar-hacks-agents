@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ACCESS_PAID,
@@ -29,7 +31,11 @@ type Props = {
 };
 
 export function ContractMarketPanel({ network }: Props) {
+  const [escrowLookup, setEscrowLookup] = useState("");
+  const [requestLookup, setRequestLookup] = useState("");
+
   const cfg = trpc.agentMarket.config.useQuery({ network }, { staleTime: 60_000 });
+  const diag = trpc.agentMarket.diagnostics.useQuery({ network }, { staleTime: 15_000 });
   const list = trpc.agentMarket.listServices.useQuery(
     { network, startAfter: 0, limit: 16 },
     { enabled: cfg.data?.configured === true, staleTime: 30_000 }
@@ -38,6 +44,24 @@ export function ContractMarketPanel({ network }: Props) {
   const rep = trpc.agentMarket.getReputation.useQuery(
     { network, serviceId: firstId ?? 0 },
     { enabled: cfg.data?.configured === true && firstId != null, staleTime: 30_000 }
+  );
+
+  const escrowIdTrim = escrowLookup.trim();
+  const requestIdTrim = requestLookup.trim();
+  const escrowOk = /^\d+$/.test(escrowIdTrim);
+  const requestOk = /^\d+$/.test(requestIdTrim);
+
+  const escrowQ = trpc.agentMarket.getEscrow.useQuery(
+    { network, escrowId: escrowIdTrim },
+    { enabled: cfg.data?.configured === true && escrowOk, staleTime: 10_000 }
+  );
+  const settlementQ = trpc.agentMarket.getSettlement.useQuery(
+    { network, requestId: requestIdTrim },
+    { enabled: cfg.data?.configured === true && requestOk, staleTime: 10_000 }
+  );
+  const receiptQ = trpc.agentMarket.getActionReceipt.useQuery(
+    { network, requestId: requestIdTrim },
+    { enabled: cfg.data?.configured === true && requestOk, staleTime: 10_000 }
   );
 
   if (cfg.isLoading) {
@@ -56,16 +80,47 @@ export function ContractMarketPanel({ network }: Props) {
 
   if (!cfg.data?.configured) {
     return (
-      <Card className="border-amber-500/20 bg-[var(--surface)]/80">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-amber-100">Onchain market (Soroban)</CardTitle>
-          <CardDescription className="text-xs text-[var(--muted-text)]">
-            Set <span className="font-mono">SOROBAN_AGENT_MARKET_CONTRACT_ID</span> and optional{" "}
-            <span className="font-mono">SOROBAN_RPC_URL</span> on the server to load the service registry, pricing,
-            escrow, and reputation from the deployed contract.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant="outline"
+            className={
+              network === "testnet"
+                ? "text-[10px] border-cyan-500/40 text-cyan-200"
+                : "text-[10px] border-amber-500/35 text-amber-200"
+            }
+          >
+            {network === "testnet" ? "Soroban testnet" : "Soroban mainnet"}
+          </Badge>
+        </div>
+        <Card className="border-amber-500/20 bg-[var(--surface)]/80">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-amber-100">Onchain market (Soroban)</CardTitle>
+            <CardDescription className="text-xs text-[var(--muted-text)]">
+              Set <span className="font-mono">SOROBAN_AGENT_MARKET_CONTRACT_ID</span> (or{" "}
+              <span className="font-mono">SOROBAN_AGENT_MARKET_CONTRACT_ID_FILE</span> pointing at{" "}
+              <span className="font-mono">contracts/deploy/testnet-contract-id.env</span>) and optional{" "}
+              <span className="font-mono">SOROBAN_RPC_URL</span> on the server. Deploy with{" "}
+              <span className="font-mono">pnpm contracts:deploy:testnet</span> after the Stellar CLI is installed.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        {diag.data ? (
+          <Card className="border-slate-600/30 bg-[var(--surface)]/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-200">Deploy diagnostics</CardTitle>
+              <CardDescription className="text-xs text-[var(--muted-text)]">
+                Run <span className="font-mono">pnpm contracts:diagnose</span> locally for WASM / CLI / rust target
+                checks.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-xs font-mono text-slate-400 space-y-1">
+              <p>rpc: {diag.data.rpcUrl}</p>
+              <p>sorobanProbe: {JSON.stringify(diag.data.sorobanProbe)}</p>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     );
   }
 
@@ -74,6 +129,24 @@ export function ContractMarketPanel({ network }: Props) {
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className={
+            network === "testnet"
+              ? "text-[10px] border-cyan-500/40 text-cyan-200"
+              : "text-[10px] border-amber-500/35 text-amber-200"
+          }
+        >
+          {network === "testnet" ? "Soroban testnet" : "Soroban mainnet"}
+        </Badge>
+        {cfg.data.contractIdSource ? (
+          <Badge variant="outline" className="text-[10px] border-slate-600 text-slate-400">
+            id from {cfg.data.contractIdSource}
+          </Badge>
+        ) : null}
+      </div>
+
       <Card className="border-cyan-500/15 bg-[var(--surface)]/80">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm text-cyan-100">Registry &amp; RPC</CardTitle>
@@ -86,6 +159,15 @@ export function ContractMarketPanel({ network }: Props) {
           <p className="text-slate-500">
             {services.length} service{services.length === 1 ? "" : "s"} onchain
           </p>
+          {diag.data?.sorobanProbe.ok === false ? (
+            <p className="text-amber-200/90 text-[11px]">
+              Probe: {diag.data.sorobanProbe.stage} — {diag.data.sorobanProbe.message}
+            </p>
+          ) : diag.data?.sorobanProbe.ok ? (
+            <p className="text-emerald-200/80 text-[11px]">
+              RPC simulation ok (sample list length {diag.data.sorobanProbe.listSampleLen})
+            </p>
+          ) : null}
           {err ? <p className="text-amber-200/90">{err}</p> : null}
         </CardContent>
       </Card>
@@ -134,15 +216,76 @@ export function ContractMarketPanel({ network }: Props) {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm text-cyan-100">Escrow &amp; settlement</CardTitle>
           <CardDescription className="text-xs text-[var(--muted-text)]">
-            Escrow state and settlement rows are read with <span className="font-mono">get_escrow</span> /{" "}
-            <span className="font-mono">get_settlement</span> from the task flow or explorer; this panel surfaces catalog
-            context only.
+            Look up onchain escrow and settlement rows by numeric id (u64). Values are simulated/read-only through the
+            server.
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-xs text-slate-500">
-          Use tRPC <span className="font-mono">agentMarket.getEscrow</span>,{" "}
-          <span className="font-mono">getSettlement</span>, and <span className="font-mono">getActionReceipt</span> with
-          known ids.
+        <CardContent className="space-y-3 text-xs">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wide text-slate-500">Escrow id</label>
+            <Input
+              value={escrowLookup}
+              onChange={e => setEscrowLookup(e.target.value)}
+              placeholder="e.g. 1"
+              className="font-mono text-xs h-8"
+            />
+            {escrowOk ? (
+              escrowQ.isLoading ? (
+                <Skeleton className="h-10 w-full mt-2" />
+              ) : escrowQ.data?.escrow ? (
+                <pre className="mt-2 p-2 rounded-md bg-slate-950/60 text-[10px] text-slate-300 overflow-x-auto">
+                  {JSON.stringify(escrowQ.data.escrow, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-slate-500 mt-1">No escrow at this id.</p>
+              )
+            ) : escrowIdTrim ? (
+              <p className="text-amber-200/80">Use digits only.</p>
+            ) : null}
+            {escrowQ.error ? (
+              <p className="text-amber-200/90">{escrowQ.error.message}</p>
+            ) : null}
+          </div>
+          <div className="space-y-1 border-t border-slate-700/50 pt-3">
+            <label className="text-[10px] uppercase tracking-wide text-slate-500">Request id (settlement / receipt)</label>
+            <Input
+              value={requestLookup}
+              onChange={e => setRequestLookup(e.target.value)}
+              placeholder="e.g. 2"
+              className="font-mono text-xs h-8"
+            />
+            {requestOk ? (
+              settlementQ.isLoading || receiptQ.isLoading ? (
+                <Skeleton className="h-10 w-full mt-2" />
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {settlementQ.data?.settlement ? (
+                    <div>
+                      <p className="text-[10px] text-slate-500 mb-1">Settlement</p>
+                      <pre className="p-2 rounded-md bg-slate-950/60 text-[10px] text-slate-300 overflow-x-auto">
+                        {JSON.stringify(settlementQ.data.settlement, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500">No settlement row.</p>
+                  )}
+                  {receiptQ.data?.receipt ? (
+                    <div>
+                      <p className="text-[10px] text-slate-500 mb-1">Action receipt</p>
+                      <pre className="p-2 rounded-md bg-slate-950/60 text-[10px] text-slate-300 overflow-x-auto">
+                        {JSON.stringify(receiptQ.data.receipt, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            ) : requestIdTrim ? (
+              <p className="text-amber-200/80">Use digits only.</p>
+            ) : null}
+            {settlementQ.error ? (
+              <p className="text-amber-200/90">{settlementQ.error.message}</p>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 

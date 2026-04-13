@@ -7,6 +7,9 @@ dist/
 build/
 *.dist
 contracts/target/
+contracts/stellar-agent-market/target/
+contracts/deploy/testnet-contract-id.env
+contracts/deploy/*.local.env
 
 # Environment variables
 .env

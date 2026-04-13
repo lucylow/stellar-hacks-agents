@@ -14,7 +14,9 @@
  * and Stellar token custody / SAC transfers (escrow release still coordinates offchain).
  *
  * UI surfaces: dashboard + task/agent flows should show registry, price, escrow, receipts,
- * and reputation chips when `SOROBAN_AGENT_MARKET_CONTRACT_ID` is set.
+ * and reputation chips when `SOROBAN_AGENT_MARKET_CONTRACT_ID` is set (or loaded via
+ * `SOROBAN_AGENT_MARKET_CONTRACT_ID_FILE` pointing at deploy output such as
+ * `contracts/deploy/testnet-contract-id.env`).
  */
 
 export const ACCESS_PUBLIC = 0;

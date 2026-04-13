@@ -11,6 +11,10 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "contracts:build": "cargo build --manifest-path contracts/Cargo.toml -p stellar-agent-market --target wasm32-unknown-unknown --release",
+    "contracts:build:docker": "docker run --rm -v \"$PWD/contracts:/workspace\" -w /workspace rust:1.85-bookworm bash -lc 'rustup target add wasm32-unknown-unknown && cargo build --manifest-path Cargo.toml -p stellar-agent-market --target wasm32-unknown-unknown --release'",
+    "contracts:deploy:testnet": "bash contracts/scripts/deploy-testnet.sh",
+    "contracts:diagnose": "tsx scripts/soroban-diagnostics.ts",
+    "contracts:diagnose:strict": "tsx scripts/soroban-diagnostics.ts --strict",
     "contracts:test": "cargo test --manifest-path contracts/Cargo.toml -p stellar-agent-market",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },

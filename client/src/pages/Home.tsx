@@ -8,7 +8,7 @@
  * - Mock vs live: centralized badges + copy; search remains explicitly demo when flagged.
  * - Mobile: single column stack, full-width cards, no horizontal tab strip fighting the layout.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useStellarWallet } from "@/_core/context/StellarWalletContext";
 import { useAgentWorkflow } from "@/_core/context/AgentWorkflowContext";
 import type { AgentActivityState } from "@shared/appConnectionModel";
@@ -17,18 +17,25 @@ import { AgentChat } from "@/components/AgentChat";
 import { AccountDashboard } from "@/components/AccountDashboard";
 import { AgentTaskPanel } from "@/components/AgentTaskPanel";
 import { AppSection, DemoLiveBadge } from "@/components/app/uiPrimitives";
-import { Zap, Wallet, ArrowRight, Sparkles, Cpu, Search } from "lucide-react";
+import { Zap, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { trpc } from "@/lib/trpc";
 import { STELLAR_SEARCH_USES_MOCK } from "@shared/const";
-import { LayoutSection } from "@/components/LayoutSection";
-import { SearchDemoPanel } from "@/components/SearchDemoPanel";
-import { ActivityFeedSection } from "@/components/ActivityFeedSection";
 import { useReputation } from "@/_core/context/ReputationContext";
 import { TierBadge, TrendGlyph } from "@/components/reputation/TrustPrimitives";
 import { ContractMarketPanel } from "@/components/ContractMarketPanel";
+import { ConsoleLanding } from "@/components/console/ConsoleLanding";
+import { PolicyControls } from "@/components/console/PolicyControls";
+import { ServiceCatalogConsole } from "@/components/console/ServiceCatalogConsole";
+import { AgenticSearchWorkflow } from "@/components/console/AgenticSearchWorkflow";
+import { ContractStatePanel } from "@/components/console/ContractStatePanel";
+import { AuditLogPanel } from "@/components/console/AuditLogPanel";
+import { DEFAULT_SERVICE_ID } from "@/data/agenticConsoleSeed";
+import type { PolicyState } from "@/lib/demoConsoleTypes";
+import { mockWalletState } from "@/lib/mockData";
+import { truncatePublicKey } from "@shared/stellarAccountFormat";
 
 function agentActivityLabel(state: AgentActivityState): string {
   switch (state) {
@@ -84,163 +91,87 @@ function HomeShell() {
   const isConnecting = status === "connecting";
   const freighterAvailable = freighterDetected;
   const [showApp, setShowApp] = useState(isConnected);
+  const [catalogServiceId, setCatalogServiceId] = useState(DEFAULT_SERVICE_ID);
+  const [policy, setPolicy] = useState<PolicyState>({
+    spendCapUsdc: 0.02,
+    approvalMode: "explicit",
+    allowlistOnly: false,
+    automationPaused: false,
+    humanOverride: false,
+  });
   const caps = trpc.agent.capabilities.useQuery(undefined, { staleTime: 60_000 });
+
+  const landingPreview = useMemo(
+    () => ({
+      walletLabel:
+        isConnected && (publicKey ?? account?.publicKey)
+          ? truncatePublicKey(publicKey ?? account!.publicKey)
+          : `Demo ${truncatePublicKey(mockWalletState.address)}`,
+      network: isConnected ? (network === "mainnet" ? "Mainnet" : "Testnet") : "Testnet (mock)",
+      query: "USDC liquidity routes on Stellar",
+      estimate: "0.001 USDC · Search MCP (web)",
+      approval: "Explicit approval",
+      result: "Structured results + audit trail",
+    }),
+    [isConnected, publicKey, account?.publicKey, network]
+  );
 
   if (!isConnected && !showApp) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 right-10 w-96 h-96 bg-cyan-500/8 rounded-full blur-3xl animate-pulse" />
-          <div
-            className="absolute bottom-20 left-10 w-96 h-96 bg-purple-500/8 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "1s" }}
-          />
-        </div>
-
-        <header className="relative z-10 border-b border-cyan-500/15 bg-slate-950/50 backdrop-blur-md">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md shadow-cyan-900/40">
-                  <Zap className="w-6 h-6 text-white" />
-                </div>
-                <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-cyan-400">
-                  Stellar AI Agent
-                </h1>
-              </div>
-              <div className="flex flex-wrap gap-1.5 justify-end">
-                <Badge variant="outline" className="border-slate-600 text-slate-300 text-[10px]">
-                  Demo
-                </Badge>
-                {STELLAR_SEARCH_USES_MOCK && (
-                  <Badge variant="outline" className="border-amber-500/35 text-amber-200 text-[10px]">
-                    Search mock
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="relative z-10 container mx-auto px-4 py-20">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <div className="space-y-4">
-              <h2 className="text-5xl md:text-6xl font-bold">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-cyan-300">
-                  Blockchain AI
-                </span>
-                <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-                  Meets Intelligence
-                </span>
-              </h2>
-              <p className="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
-                Connect Freighter for live Horizon data, or open the demo to chat and inspect the agent workflow without a
-                wallet.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-12">
-              {[
-                {
-                  icon: Wallet,
-                  title: "Wallet connect",
-                  body: "Freighter + configurable testnet or mainnet Horizon.",
-                  border: "border-cyan-500/25",
-                },
-                {
-                  icon: Cpu,
-                  title: "AI agents",
-                  body: "LLM tool calls with visible search and lookup steps.",
-                  border: "border-purple-500/25",
-                },
-                {
-                  icon: Search,
-                  title: "Search bridge",
-                  body: "Structured cards for mock or future live MCP search.",
-                  border: "border-pink-500/25",
-                },
-              ].map((f) => (
-                <div
-                  key={f.title}
-                  className={`relative bg-slate-900/40 ${f.border} rounded-xl p-6 transition hover:border-opacity-60 hover:shadow-lg hover:shadow-black/20`}
-                >
-                  <f.icon className="w-8 h-8 text-cyan-400 mb-3" />
-                  <h3 className="text-lg font-semibold text-slate-100 mb-2">{f.title}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{f.body}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
-              <Button
-                type="button"
-                onClick={() => {
-                  setShowApp(true);
-                  void connectWallet();
-                }}
-                className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black font-semibold px-8 py-6 text-lg rounded-lg shadow-md shadow-cyan-900/40 flex items-center gap-2"
-              >
-                <Wallet className="w-5 h-5" />
-                Connect wallet & launch
-                <ArrowRight className="w-5 h-5" />
-              </Button>
-              <Button
-                type="button"
-                onClick={() => setShowApp(true)}
-                variant="outline"
-                className="border-purple-500/40 text-purple-200 hover:bg-purple-950/40 px-8 py-6 text-lg rounded-lg"
-              >
-                <Sparkles className="w-5 h-5 mr-2" />
-                Explore demo (no wallet)
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 pt-16 border-t border-slate-800/80">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-cyan-400">Stellar</p>
-                <p className="text-sm text-slate-500 mt-1">Native scope</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold text-purple-400">tRPC</p>
-                <p className="text-sm text-slate-500 mt-1">Typed API</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold text-pink-400">Tools</p>
-                <p className="text-sm text-slate-500 mt-1">Visible steps</p>
-              </div>
-            </div>
-          </div>
-        </main>
-
-        <footer className="relative z-10 border-t border-slate-800/80 bg-slate-950/40 backdrop-blur-md mt-20">
-          <div className="container mx-auto px-4 py-8">
-            <p className="text-center text-sm text-slate-500">
-              DoraHacks Stellar Agents x402 Stripe MPP | Stellar testnet/mainnet via Horizon
-            </p>
-          </div>
-        </footer>
-      </div>
+      <ConsoleLanding
+        preview={landingPreview}
+        onConnectLaunch={() => {
+          setShowApp(true);
+          void connectWallet();
+        }}
+        onDemoLaunch={() => setShowApp(true)}
+      />
     );
   }
 
   const networkLabel = network === "mainnet" ? "Mainnet" : "Testnet";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <header className="border-b border-cyan-500/15 bg-slate-950/85 backdrop-blur-sm sticky top-0 z-50">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <a
+        href="#console-search"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-[var(--surface-elevated)] focus:px-3 focus:py-2 focus:text-sm"
+      >
+        Skip to search console
+      </a>
+      <header className="border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md shadow-slate-900/50">
-                <Zap className="w-6 h-6 text-white" />
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-cyan-400 flex items-center justify-center shadow-[var(--shadow-card)] border border-white/10 shrink-0">
+                  <Zap className="w-6 h-6 text-[var(--primary-foreground)]" aria-hidden />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-lg font-semibold tracking-tight text-[var(--text)] truncate">Stellar agent console</h1>
+                  <p className="text-xs text-[var(--muted-text)]">Wallet · x402 demo · Search MCP · Horizon</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
-                  Stellar AI Agent
-                </h1>
-                <p className="text-xs text-slate-500">Wallet + agent + Horizon</p>
-              </div>
+              <nav
+                className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-[var(--muted-text)]"
+                aria-label="Console sections"
+              >
+                <a className="hover:text-[var(--accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded-sm" href="#guardrails">
+                  Guardrails
+                </a>
+                <a className="hover:text-[var(--accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded-sm" href="#mcp-catalog">
+                  MCP catalog
+                </a>
+                <a className="hover:text-[var(--accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded-sm" href="#console-search">
+                  Search &amp; x402
+                </a>
+                <a className="hover:text-[var(--accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded-sm" href="#contract-state">
+                  Contract
+                </a>
+                <a className="hover:text-[var(--accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded-sm" href="#audit-log">
+                  Audit log
+                </a>
+              </nav>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 justify-end">
@@ -360,12 +291,12 @@ function HomeShell() {
         <section className="app-hero" aria-labelledby="console-hero-title">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 id="console-hero-title" className="text-lg font-semibold text-cyan-100 tracking-tight">
-                Stellar AI console
+              <h2 id="console-hero-title" className="text-lg font-semibold text-[var(--text)] tracking-tight">
+                Control center
               </h2>
               <p className="text-sm text-[var(--muted-text)] max-w-2xl leading-relaxed mt-1">
-                Wallet status, agent chat, Horizon account data, and task timing in one layout. Anything labeled demo or
-                mock uses simulated data — live ledger rows are called out when real.
+                One surface for wallet health, explicit x402 approval, Search MCP catalog inspection, Soroban market context,
+                agent chat, and an auditable timeline. Demo labels stay visible so mock and live paths never blur together.
               </p>
             </div>
             {!isConnected && (
@@ -397,26 +328,58 @@ function HomeShell() {
           <div className="xl:col-span-3 space-y-6 min-w-0">
             <AppSection
               title="Wallet & session"
-              description="Provider, address, balance, and network. x402 flows are demo-only here."
+              description="Provider, address, balance, and network. Signing readiness is surfaced for x402-style auth entries."
             >
               <WalletConnect />
             </AppSection>
+            <div id="guardrails" className="scroll-mt-28">
+              <AppSection
+                title="Policy & guardrails"
+                description="Spend caps, approval mode, allowlists, and pause — first-class controls, not warnings."
+              >
+                <PolicyControls policy={policy} onChange={setPolicy} />
+              </AppSection>
+            </div>
+            <div id="mcp-catalog" className="scroll-mt-28">
+              <AppSection
+                title="Service discovery"
+                description="Inspect MCP tools, pricing, and whether human approval is required before spend."
+              >
+                <ServiceCatalogConsole selectedId={catalogServiceId} onSelect={setCatalogServiceId} />
+              </AppSection>
+            </div>
             <AppSection
               title="Account dashboard"
-              description="Live blockchain data from Horizon for the connected address."
+              description="Live Horizon rows for the connected address when a wallet is ready."
             >
               <AccountDashboard onConnectRequest={() => void connectWallet()} />
             </AppSection>
+            <div id="contract-state" className="scroll-mt-28">
+              <AppSection
+                title="Onchain snapshot (demo registry)"
+                description="Observability-style view of registry fields plus session settlements."
+              >
+                <ContractStatePanel />
+              </AppSection>
+            </div>
             <AppSection
               title="Soroban market"
-              description="Service registry, onchain pricing, escrow/settlement hooks, and reputation counters when a contract id is configured."
+              description="Registered agents, pricing, escrow hooks, and reputation counters when a contract id is configured."
             >
               <ContractMarketPanel network={network} />
             </AppSection>
-            <ActivityFeedSection />
+            <div id="audit-log" className="scroll-mt-28">
+              <AuditLogPanel />
+            </div>
           </div>
 
           <div className="xl:col-span-6 flex flex-col gap-6 min-w-0 min-h-0">
+            <AppSection
+              title="Search request composer"
+              description="Quote → approval → simulated settlement → MCP-backed search. Mirrors the story judges expect from x402 + Stellar."
+            >
+              <AgenticSearchWorkflow policy={policy} serviceId={catalogServiceId} />
+            </AppSection>
             <AppSection
               title="Agent chat"
               description="Plans and tool calls stay visible. Demo or mock sources are labeled on each result card."
@@ -442,19 +405,19 @@ function HomeShell() {
         </div>
       </main>
 
-      <div id="search-demo" className="container mx-auto px-4 pb-10">
-        <LayoutSection
-          title="Search experience (demo)"
-          description="Uses the same tRPC search procedure as the agent. Results are labeled mock data until a live MCP server is connected."
-        >
-          <SearchDemoPanel />
-        </LayoutSection>
-      </div>
-
-      <footer className="border-t border-cyan-500/15 bg-slate-950/80 mt-12">
-        <div className="container mx-auto px-4 py-6 text-center text-xs text-slate-500">
-          Stellar AI Agent · Horizon {networkLabel} ·{" "}
-          <a href="https://freighter.app" className="text-cyan-500/90 hover:underline" target="_blank" rel="noreferrer">
+      <footer className="border-t border-[var(--border)] bg-[var(--surface)]/85 mt-12">
+        <div className="container mx-auto px-4 py-6 text-center text-xs text-[var(--muted-text)]">
+          Stellar agent console · Horizon {networkLabel} ·{" "}
+          <a
+            href="https://developers.stellar.org"
+            className="text-[var(--accent-primary)] hover:underline"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Developers
+          </a>{" "}
+          ·{" "}
+          <a href="https://freighter.app" className="text-[var(--accent-primary)] hover:underline" target="_blank" rel="noreferrer">
             Freighter
           </a>
         </div>

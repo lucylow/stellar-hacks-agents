@@ -2,7 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import { publicProcedure, router } from "../_core/trpc";
-import { getAgentMarketContractId, getSorobanRpcUrlOverride } from "../_core/agentMarketEnv";
+import {
+  getAgentMarketContractId,
+  getAgentMarketContractIdMeta,
+  getSorobanRpcUrlOverride,
+} from "../_core/agentMarketEnv";
 import {
   loadAgentMarketClient,
   normalizeActionReceipt,
@@ -111,14 +115,61 @@ export const agentMarketContractRouter = router({
     .input(z.object({ network: networkIn }).optional())
     .query(({ input }) => {
       const network = input?.network ?? "testnet";
-      const contractId = getAgentMarketContractId();
-      const configured = Boolean(contractId);
+      const meta = getAgentMarketContractIdMeta();
       return {
-        configured,
-        contractId: contractId ?? null,
+        configured: Boolean(meta.id),
+        contractId: meta.id ?? null,
+        contractIdSource: meta.source,
         rpcUrl: getSorobanRpcUrl(network, getSorobanRpcUrlOverride()),
         network,
         networkPassphrase: STELLAR_NETWORK_PASSPHRASE[network],
+      } as const;
+    }),
+
+  /** Build/test/deploy health hints for developers; includes a live Soroban simulation probe when configured. */
+  diagnostics: publicProcedure
+    .input(z.object({ network: networkIn }).optional())
+    .query(async ({ input }) => {
+      const network = input?.network ?? "testnet";
+      const meta = getAgentMarketContractIdMeta();
+      const rpcUrl = getSorobanRpcUrl(network, getSorobanRpcUrlOverride());
+
+      let probe:
+        | { ok: true; listSampleLen: number }
+        | { ok: false; stage: string; message: string } = {
+        ok: false,
+        stage: "skipped",
+        message: "contract id not configured",
+      };
+
+      if (meta.id) {
+        try {
+          const client = await loadAgentMarketClient(network);
+          if (!client) {
+            probe = {
+              ok: false,
+              stage: "client",
+              message: "Soroban Client.from failed (check contract id and RPC URL)",
+            };
+          } else {
+            const c = client as unknown as DynClient;
+            const raw = await readResult<unknown[]>(
+              c.list_services({ start_after: 0, limit: 1 })
+            );
+            probe = { ok: true, listSampleLen: Array.isArray(raw) ? raw.length : 0 };
+          }
+        } catch (e) {
+          const msg = e instanceof TRPCError ? e.message : e instanceof Error ? e.message : String(e);
+          probe = { ok: false, stage: "simulation", message: msg };
+        }
+      }
+
+      return {
+        network,
+        rpcUrl,
+        contractId: meta.id,
+        contractIdSource: meta.source,
+        sorobanProbe: probe,
       } as const;
     }),
 

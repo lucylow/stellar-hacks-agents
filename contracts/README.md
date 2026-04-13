@@ -11,28 +11,76 @@ Primary contract crate: `contracts/stellar-agent-market/`
 - **Reputation**: compact counters and a bounded score, updated only by **admin** through `record_reputation_event`.
 - **Errors & events**: typed `ContractError` and publishable events for indexing.
 
-## Build & test
+## Toolchain
 
-Requires a standard Rust toolchain with the `wasm32-unknown-unknown` target:
+- **Rust**: `rustup` + `wasm32-unknown-unknown` (used by `pnpm contracts:build`). Newer Stellar CLI builds may emit `target/wasm32v1-none/release/*.wasm` instead; the deploy script accepts either path.
+- **Stellar CLI**: install from [Developer tools](https://developers.stellar.org/docs/tools/developer-tools). Used for `stellar contract build` (optional) and **testnet deploy**.
+
+Local checks from the repo root:
+
+```bash
+pnpm contracts:diagnose         # informational JSON + blockers on stderr (exit 0)
+pnpm contracts:diagnose:strict  # exit 1 if WASM / CLI / rust targets are missing
+```
+
+## Build & test
 
 ```bash
 rustup target add wasm32-unknown-unknown
-cd contracts
-cargo test -p stellar-agent-market
-cargo build -p stellar-agent-market --target wasm32-unknown-unknown --release
+pnpm contracts:test
+pnpm contracts:build
 ```
 
-The optimized WASM artifact is written under `contracts/target/wasm32-unknown-unknown/release/stellar_agent_market.wasm`.
+With Stellar CLI installed you can instead build from the crate directory:
+
+```bash
+cd contracts/stellar-agent-market && stellar contract build
+```
+
+Release artifact (cargo path): `contracts/target/wasm32-unknown-unknown/release/stellar_agent_market.wasm`.
 
 ## Deploy (testnet-first)
 
-1. Build the WASM (above).
-2. Use [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools) (`stellar contract deploy`) against Soroban testnet RPC.
-3. Call `initialize` once with the admin `Address` you control.
-4. Set server env `SOROBAN_AGENT_MARKET_CONTRACT_ID` to the deployed contract id (starts with `C` on future networks / contract addresses per Stellar conventions).
-5. Optional: `SOROBAN_RPC_URL` to override defaults in `shared/stellarSoroban.ts`.
+Official flow: funded identity → build WASM → `stellar contract deploy` → save contract id → invoke `initialize` once. See [Deploy to testnet](https://developers.stellar.org/docs/build/smart-contracts/getting-started/deploy-to-testnet).
 
-Mainnet uses the same flow with mainnet RPC, passphrase, and funding; keep testnet as the default development path.
+1. **Identity** (example name `alice`):
+
+   ```bash
+   stellar keys generate alice --network testnet --fund
+   stellar keys address alice
+   ```
+
+2. **Deploy and write env file** (from repo root):
+
+   ```bash
+   export SOURCE_ACCOUNT=alice
+   # optional: auto-call initialize(admin = alice’s address)
+   # export RUN_INIT=1
+   pnpm contracts:deploy:testnet
+   ```
+
+   This runs `contracts/scripts/deploy-testnet.sh`, which prefers `stellar contract build` when available, then deploys with `--alias stellar_agent_market` and writes `contracts/deploy/testnet-contract-id.env` (gitignored). Copy the `SOROBAN_AGENT_MARKET_CONTRACT_ID` line into the server `.env`, **or** set:
+
+   `SOROBAN_AGENT_MARKET_CONTRACT_ID_FILE=/absolute/path/to/contracts/deploy/testnet-contract-id.env`
+
+3. **Initialize** (if you did not use `RUN_INIT=1`):
+
+   ```bash
+   stellar contract invoke \
+     --id YOUR_CONTRACT_ID \
+     --source-account alice \
+     --network testnet \
+     --send=yes \
+     -- \
+     initialize \
+     --admin $(stellar keys address alice)
+   ```
+
+4. Optional: `SOROBAN_RPC_URL` to override defaults in `shared/stellarSoroban.ts`.
+
+Mainnet uses the same pattern with a funded mainnet key, mainnet network flag, and mainnet Soroban RPC.
+
+Committed template: `contracts/deploy/testnet-contract-id.env.example`.
 
 ## Backend usage
 
